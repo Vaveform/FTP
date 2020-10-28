@@ -12,6 +12,36 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColName){
     return 0;
 }
 
+struct addrinfo create_addrinfo_pattern(int _protocol_family, int _socktype, int _flags){
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = _protocol_family;
+  hints.ai_socktype = _socktype;
+  hints.ai_flags = _flags;
+  return hints;
+}
+
+SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiting_connections){
+  struct addrinfo* bind_addresses;
+  struct addrinfo hints = create_addrinfo_pattern(AF_INET, SOCK_STREAM, AI_PASSIVE);
+  getaddrinfo(address, port_name, &hints, &bind_addresses);
+  SOCKET socket_listen = socket(bind_addresses->ai_family, bind_addresses->ai_socktype, bind_addresses->ai_protocol);
+  if(!ISVALIDSOCKET(socket_listen)){
+    fprintf(stderr, "socket() failed. (%d)\n", GETSOCKETERRNO());
+    return -1;
+  }
+  if(bind(socket_listen, bind_addresses->ai_addr, bind_addresses->ai_addrlen)){
+    fprintf(stderr, "bind() failed. (%d)\n", GETSOCKETERRNO());
+    return -1;
+  }
+  freeaddrinfo(bind_addresses);
+  if(listen(socket_listen, max_number_waiting_connections) < 0){
+    fprintf(stderr, "listen() failed. (%d)\n", GETSOCKETERRNO());
+    return -1;
+  }
+  return socket_listen;
+}
+
 
 // This function create listen_socket for address and port_name and return them.
 // After calling of this function need to call bind to tie with local address using
@@ -48,50 +78,8 @@ int main(int argc, char** argv){
   }
   printf("This is FTP-server\n");
   printf("Binding server to the IP-address: %s and Port: %s\n", argv[1], argv[2]);
-  // hints - addrinfo structure. This is structure point to preferable type of
-  // socket or protocol 
-  struct addrinfo hints;
-  memset(&hints, 0, sizeof(hints));
-  // Filling structure hints - what will be find
-  // addrinfo.ai_family - looking for an IPv4 addresses (AF_INET6 - IPv6 addresses)
-  hints.ai_family = AF_INET;
-  // addrinfo.ai_socktype - type of transport protocol: SOCK_DGRAM - UDP or SOCK_STREAM - TCP
-  hints.ai_socktype = SOCK_STREAM;
-  // addrinfo.ai_flags - to recieve connections from clients, which have any net address
-  hints.ai_flags = AI_PASSIVE;
-  // Fill passed link list of addrinfo structure. By one for every net address subject to
-  // Seleected hints structure pararmetrs 
-  struct addrinfo* bind_address; 
-  getaddrinfo(argv[1], argv[2], &hints, &bind_address);
-  printf("Creating socket...\n");
-  // int socket(int domain, int type, int protocol);
-  // domain - this parametr select set of the protocols, which will be using for creation connection
-  // type - this parametr select semantics of communication (tranport protocols for example TCP/UDP)
-  // protocol - this parametr set concrete type of protocol
-  // SOCKET listen_socket = initialize_server_socket(argv[1], argv[2], bind_address);
-  SOCKET listen_socket = socket(bind_address->ai_family, bind_address->ai_socktype, bind_address->ai_protocol);
-  // To check on valid or not valid returned socket 
-  if(!ISVALIDSOCKET(listen_socket)){
-    fprintf(stderr, "socket() failed. (%d)\n", GETSOCKETERRNO());
-    return 1;
-  }
-  // Binding returned socket with local address with using filled bind_address
-  printf("Binding...\n");
-  // printf("%d\n", (int)bind_address->ai_addrlen);
-  if(bind(listen_socket, bind_address->ai_addr, bind_address->ai_addrlen)){
-    fprintf(stderr, "bind() failed. (%d)\n", GETSOCKETERRNO());
-    return 1;
-  }
-  // Free resources (address storage) related with bind_address
-  freeaddrinfo(bind_address);
-  // Start listening on listen_socket. Second parametr set the max number of input
-  // connections to the queue. If queue overflowed all input connection will be rejected
-  printf("Listening connections...\n");
-  if(listen(listen_socket, 10) < 0){
-    fprintf(stderr, "listen() failed. (%d)\n", GETSOCKETERRNO());
-    CLOSESOCKET(listen_socket);
-    return 1;
-  }
+  
+  SOCKET listen_socket = create_listen_socket(argv[1], argv[2], 10);
 
   printf("Waiting a connection...\n");
   // client_address - to store address info for the connecting client
@@ -113,18 +101,15 @@ int main(int argc, char** argv){
   char address_buffer[100];
   getnameinfo((struct sockaddr*)&client_address, client_len, address_buffer, sizeof(address_buffer), 0, 0, NI_NUMERICHOST);
 
+  char buffer[1024];
   const char* invitation = 
     "Welcome to FTP server!!!\n"
     "To enter, please input login and password.\n";
-  char enter_login[1024] = "Login:";
   int bytes_send = send(socket_client, invitation, strlen(invitation), 0);
-  printf("Sent %d of %d bytes.\n", bytes_send, strlen(invitation));
-  bytes_send = send(socket_client, enter_login, strlen(enter_login), 0);
-  printf("Sent %d of %d bytes.\n", bytes_send, strlen(invitation));
-
-  int bytes_received = recv(socket_client, enter_login, 1024, 0);
-  printf("Receive %d bytes\n", bytes_received);
-  printf("Input %s\n", enter_login);
+  int bytes_received = recv(socket_client, buffer, 1024, 0);
+  printf("Got login: %s", buffer);
+  bytes_received = recv(socket_client, buffer, 1024, 0);
+  printf("Got password: %s\n", buffer);
   CLOSESOCKET(listen_socket);
   printf("Finished\n");
 

@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <dirent.h>
 #include "net_headers.h"
 #include "sqlite3.h"
+
+#define CHUNK_SIZE 128
+
 
 static int callback(void *NotUsed, int argc, char **argv, char **azColName){
     int i;
@@ -104,12 +109,21 @@ int main(int argc, char** argv){
   char buffer[1024];
   const char* invitation = 
     "Welcome to FTP server!!!\n"
-    "To enter, please input login and password.\n";
+    "To enter, please input login and password.\r\n";
   int bytes_send = send(socket_client, invitation, strlen(invitation), 0);
   int bytes_received = recv(socket_client, buffer, 1024, 0);
   printf("Got login: %s", buffer);
   bytes_received = recv(socket_client, buffer, 1024, 0);
   printf("Got password: %s\n", buffer);
+
+  
+
+  FILE* f = fopen("Sheme.jpg", "rb");
+  size_t nbytes = 0;
+  char *file_data = (char*)malloc(sizeof(char) * CHUNK_SIZE);
+  while((nbytes = fread(file_data, 1, CHUNK_SIZE, f))){
+    bytes_send = send(socket_client, file_data, nbytes, 0);
+  }
   CLOSESOCKET(listen_socket);
   printf("Finished\n");
 

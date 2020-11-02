@@ -10,6 +10,30 @@
 
 #define SENDING_BUFFER_SIZE 128
 
+// Output - 1 - exist/ 0 not exist
+int find_file_in_current_directory(char* filename){
+    char buf[1024];
+    char* simple;
+    simple = getcwd(buf, 1024);
+    size_t length_of = strlen(simple);
+    printf("%d\n", length_of);
+    char buffer[length_of];
+    strcpy(buffer, buf);
+    DIR* dp;
+    struct dirent * dirp;
+    if((dp = opendir(buffer)) == NULL){
+        return -1;
+    }
+    while((dirp = readdir(dp)) != NULL){
+        if(!strcmp(dirp->d_name, filename)){
+            closedir(dp);
+            return 1;
+        }
+    }
+    closedir(dp);
+    return 0;
+}
+
 ssize_t getpasswd (char **pw, size_t sz, int mask, FILE *fp)
 {
     if (!pw || !sz || !fp) return -1;       /* validate input   */
@@ -155,7 +179,7 @@ int main(int argc, int** argv){
     // fclose(fp1);
     // // fclose(fp);
 
-    SOCKET socket_peer = connect_to_listen_server(argv[1], argv[2]);
+    SOCKET socket_peer = connect_to_listen_server(argv[1], "21");
     if(!ISVALIDSOCKET(socket_peer)){
         fprintf(stderr, "invalid SOCKET value");
         return -1;
@@ -179,7 +203,15 @@ int main(int argc, int** argv){
     // Sending password
     bytes_send = send(socket_peer, readed_data, 1024, 0);
     printf("\n");
+    
 
+    // command line interface:
+    // put filename - sending file to ftp server
+    // get filename - load file from server directory
+    // ls - list of the files in the server directory  
+    
+
+    // get implementation
     if(remove("Sheme.jpg"))
         printf("File named \"Sheme.jpg\" already exists. Deleted...");
     else
@@ -202,20 +234,5 @@ int main(int argc, int** argv){
     
     //Close connection with server
     CLOSESOCKET(socket_peer);
-    // char buf[1024];
-    // char* simple;
-    // simple = getcwd(buf, 1024);
-    // size_t length_of = strlen(simple);
-    // printf("%d\n", length_of);
-    // char buffer[length_of];
-    // strcpy(buffer, buf);
-    // DIR* dp;
-    // struct dirent * dirp;
-    // if((dp = opendir(buffer)) == NULL){
-    //     return -1;
-    // }
-    // while((dirp = readdir(dp)) != NULL)
-    //     printf("%s\n", dirp->d_name);
-    // closedir(dp);
     return 0;
 }

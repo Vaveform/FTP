@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include "net_headers.h"
+#include <regex.h>
 #include "sqlite3.h"
 
 #define CHUNK_SIZE 128
@@ -47,35 +48,6 @@ SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiti
   return socket_listen;
 }
 
-
-// This function create listen_socket for address and port_name and return them.
-// After calling of this function need to call bind to tie with local address using
-// First element of passed "bind_addresses", which after calling will be filled 
-SOCKET initialize_server_socket(char* address, char* port_name, struct addrinfo* bind_addresses){
-    printf("This is FTP-server\n");
-    printf("Binding server to the IP-address: %s and Port: %s\n", address, port_name);
-    // hints - addrinfo structure. This is structure point to preferable type of
-    // socket or protocol 
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
-    // Filling structure hints - what will be find
-    // addrinfo.ai_family - looking for an IPv4 addresses (AF_INET6 - IPv6 addresses)
-    hints.ai_family = AF_INET;
-    // addrinfo.ai_socktype - type of transport protocol: SOCK_DGRAM - UDP or SOCK_STREAM - TCP
-    hints.ai_socktype = SOCK_STREAM;
-    // addrinfo.ai_flags - to recieve connections from clients, which have any net address
-    hints.ai_flags = AI_PASSIVE;
-    // Fill passed link list of addrinfo structure. By one for every net address subject to
-    // Seleected hints structure pararmetrs  
-    getaddrinfo(0, "8080", &hints, &bind_addresses);
-    printf("Creating socket...\n");
-    // int socket(int domain, int type, int protocol);
-    // domain - this parametr select set of the protocols, which will be using for creation connection
-    // type - this parametr select semantics of communication (tranport protocols for example TCP/UDP)
-    // protocol - this parametr set concrete type of protocol
-    return socket(bind_addresses->ai_family, bind_addresses->ai_socktype, bind_addresses->ai_protocol);
-}
-
 int main(int argc, char** argv){
   if(argc < 3){
     printf("Not enough parametrs to launch\n");
@@ -116,7 +88,23 @@ int main(int argc, char** argv){
   bytes_received = recv(socket_client, buffer, 1024, 0);
   printf("Got password: %s\n", buffer);
 
-  
+
+
+  char buf[1024];
+  char* simple;
+  simple = getcwd(buf, 1024);
+  size_t length_of = strlen(simple);
+  printf("%d\n", length_of);
+  char buffer[length_of];
+  strcpy(buffer, buf);
+  DIR* dp;
+  struct dirent * dirp;
+  if((dp = opendir(buffer)) == NULL){
+      return -1;
+  }
+  while((dirp = readdir(dp)) != NULL)
+      printf("%s\n", dirp->d_name);
+  closedir(dp);
 
   FILE* f = fopen("Sheme.jpg", "rb");
   size_t nbytes = 0;

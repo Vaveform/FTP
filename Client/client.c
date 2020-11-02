@@ -10,7 +10,31 @@
 
 #define SENDING_BUFFER_SIZE 128
 
-// Output - 1 - exist/ 0 not exist
+
+void parse_command(char* generic_command, char** _command, char** _parametr){
+    // For logging
+    //printf("Input command: %s\n", generic_command);
+    int index = 0;
+    int size_of_symbols = strlen(generic_command);
+    while(index != size_of_symbols - 1){
+        if(generic_command[index] == ' ')
+            break;
+        index++;
+    }
+    //printf("Index: %d\n", index);
+    char* subbuff1 = (char*)malloc(sizeof(char) * index);
+    char* subbuff2 = (char*)malloc(sizeof(char) * (size_of_symbols - index - 1));
+    memcpy(subbuff1, generic_command, index);
+    memcpy(subbuff2, &generic_command[index + 1], size_of_symbols - index - 1);
+    // printf("Length: %d\n", size_of_symbols - index - 1);
+    // printf("Length: %d\n", strlen(subbuff2));
+    // printf("Type of command: %s\n", subbuff1);
+    // printf("Parametr of command: %s\n", subbuff2);
+    *_command = subbuff1;
+    *_parametr = subbuff2;
+}
+
+// Output - 1 - file exist/ 0 file not exist
 int find_file_in_current_directory(char* filename){
     char buf[1024];
     char* simple;
@@ -208,7 +232,10 @@ int main(int argc, int** argv){
     // command line interface:
     // put filename - sending file to ftp server
     // get filename - load file from server directory
-    // ls - list of the files in the server directory  
+    // ls - list of the files in the server directory 
+    char command[256];
+    fgets(command, 256, stdin);
+    if(c) 
     
 
     // get implementation

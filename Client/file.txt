@@ -1,4 +1,0 @@
-Hello world!!!
-Testing file I/O Stream in C programm language
-This is test!!!
-All rights reserved!!!

@@ -19,10 +19,6 @@
 #define SOCKET int
 #define GETSOCKETERRNO() (errno)
 
-
-#define CHUNK_SIZE 128
-
-
 struct addrinfo create_addrinfo_pattern(int _protocol_family, int _socktype, int _flags);
 
 SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiting_connections);
@@ -32,15 +28,13 @@ SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiti
 // And started listen with listen()
 SOCKET connect_to_listen_server(char* ip_address, char* port);
 
-// Receive file data. socket_peer_20 - which for data
-// And socket_peer_21 - to send name of file and get response of server (file exist or not)
-// Number 20 and 21 in name of pararmetrs - number of ports 
-size_t load_from_ftp(SOCKET socket_peer_20, SOCKET socket_peer_21, char* filename);
+// Write data to open file with 'ab' flags from received data from socket_peer
+// This function don't close FILE
+size_t recv_file_from_peer(SOCKET socket_peer, FILE* to_write, int _chunck_size);
 
-// Send file data. socket_peer_20 - which for data
-// And socket_peer_21 - to send name of file and get response of server
-// Number 20 and 21 in name of pararmetrs - number of ports 
-size_t send_to_ftp(SOCKET socket_peer_20, SOCKET socket_peer_21, char* filename);
+// Read data from open file with 'rb' flags and send to socket_peer
+// This function don't close FILE
+size_t send_file_to_peer(SOCKET socket_peer, FILE* to_read, int _chunck_size);
 
 
 

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include "net_headers.h"
+#include "strings_and_files.h"
 #include <regex.h>
 #include "sqlite3.h"
 

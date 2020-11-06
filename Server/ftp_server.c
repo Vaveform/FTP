@@ -2,12 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
-#include "net_headers.h"
-#include "strings_and_files.h"
-#include <regex.h>
-#include "sqlite3.h"
-
-#define CHUNK_SIZE 128
+#include "../net_headers.h"
+#include "../strings_and_files.h"
 
 
 static int callback(void *NotUsed, int argc, char **argv, char **azColName){
@@ -19,45 +15,24 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColName){
     return 0;
 }
 
-struct addrinfo create_addrinfo_pattern(int _protocol_family, int _socktype, int _flags){
-  struct addrinfo hints;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = _protocol_family;
-  hints.ai_socktype = _socktype;
-  hints.ai_flags = _flags;
-  return hints;
-}
-
-SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiting_connections){
-  struct addrinfo* bind_addresses;
-  struct addrinfo hints = create_addrinfo_pattern(AF_INET, SOCK_STREAM, AI_PASSIVE);
-  getaddrinfo(address, port_name, &hints, &bind_addresses);
-  SOCKET socket_listen = socket(bind_addresses->ai_family, bind_addresses->ai_socktype, bind_addresses->ai_protocol);
-  if(!ISVALIDSOCKET(socket_listen)){
-    fprintf(stderr, "socket() failed. (%d)\n", GETSOCKETERRNO());
-    return -1;
-  }
-  if(bind(socket_listen, bind_addresses->ai_addr, bind_addresses->ai_addrlen)){
-    fprintf(stderr, "bind() failed. (%d)\n", GETSOCKETERRNO());
-    return -1;
-  }
-  freeaddrinfo(bind_addresses);
-  if(listen(socket_listen, max_number_waiting_connections) < 0){
-    fprintf(stderr, "listen() failed. (%d)\n", GETSOCKETERRNO());
-    return -1;
-  }
-  return socket_listen;
-}
-
 int main(int argc, char** argv){
-  if(argc < 3){
-    printf("Not enough parametrs to launch\n");
-    return 0;
-  }
-  printf("This is FTP-server\n");
-  printf("Binding server to the IP-address: %s and Port: %s\n", argv[1], argv[2]);
+  // if(argc < 3){
+  //   printf("Not enough parametrs to launch\n");
+  //   return 0;
+  // }
+  // printf("This is FTP-server\n");
+  // printf("Binding server to the IP-address: %s and Port: 21\n", argv[1]);
   
-  SOCKET listen_socket = create_listen_socket(argv[1], argv[2], 10);
+  SOCKET listen_socket = create_listen_socket(argv[1], "21", 10);
+  if(!ISVALIDSOCKET(listen_socket)){
+    fprintf(stderr, "Invalid listen_socket value. (%d)\n", GETSOCKETERRNO());
+    return 1;
+  }
+  SOCKET listen_socket_data = create_listen_socket(argv[1], "20", 10);
+  if(!ISVALIDSOCKET(listen_socket_data)){
+    fprintf(stderr, "Invalid listen_socket_data value. (%d)\n", GETSOCKETERRNO());
+  }
+
 
   printf("Waiting a connection...\n");
   // client_address - to store address info for the connecting client
@@ -70,8 +45,16 @@ int main(int argc, char** argv){
   SOCKET socket_client = accept(listen_socket, (struct sockaddr*)&client_address, &client_len);
 
   if(!ISVALIDSOCKET(socket_client)){
-    fprintf(stderr, "listen() failed. (%d)\n", GETSOCKETERRNO());
+    fprintf(stderr, "accept() for listen_socket failed. (%d)\n", GETSOCKETERRNO());
     CLOSESOCKET(listen_socket);
+    return 1;
+  }
+
+  SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
+
+  if(!ISVALIDSOCKET(socket_client_data)){
+    fprintf(stderr, "accept() for listen_socket_data failed. (%d)\n", GETSOCKETERRNO());
+    CLOSESOCKET(listen_socket_data);
     return 1;
   }
 
@@ -88,33 +71,72 @@ int main(int argc, char** argv){
   printf("Got login: %s", buffer);
   bytes_received = recv(socket_client, buffer, 1024, 0);
   printf("Got password: %s\n", buffer);
-
-
-
-  char buf[1024];
-  char* simple;
-  simple = getcwd(buf, 1024);
-  size_t length_of = strlen(simple);
-  printf("%d\n", length_of);
-  char buffer[length_of];
-  strcpy(buffer, buf);
-  DIR* dp;
-  struct dirent * dirp;
-  if((dp = opendir(buffer)) == NULL){
-      return -1;
+  char generic_command[256];
+  char* command, *parametr;
+  while(1){
+    printf("Circle...\n");
+    bytes_received = recv(socket_client, generic_command, 256, 0);
+    printf("Received generic command: %s\n", generic_command);
+    parse_command(generic_command, &command, &parametr);
+    //printf("Command: %s param: %s; param strlen: %d\n", command, parametr, strlen(parametr));
+    int flag_operation = 1;
+    if(!strcmp(command,"get")){
+      if(!find_file_in_current_directory(parametr)){
+        flag_operation = 0;
+        send(socket_client, &flag_operation, sizeof(int), 0);
+        printf("File not found!!!\n");
+      }
+      else{
+        flag_operation = 1;
+        send(socket_client, &flag_operation, sizeof(int), 0);
+        // Her should be error handling
+        FILE* to_read = fopen(parametr, "rb");
+        printf("Sent file with name %s to client with size: %lu bytes\n", parametr, send_file_to_peer(socket_client_data, to_read, 128));
+        fclose(to_read);
+      }
+    }
+    else if(!strcmp(command, "put")){
+      if(find_file_in_current_directory(parametr)){
+        flag_operation = 0;
+        send(socket_client, &flag_operation, sizeof(int), 0);
+        printf("File already exist!!!\n");
+      }
+      else{
+        flag_operation = 1;
+        send(socket_client, &flag_operation, sizeof(int), 0);
+        FILE* to_write = fopen(parametr, "ab");
+        printf("Received file with name %s from client with size: %lu bytes\n", parametr, recv_file_from_peer(socket_client_data, to_write, 128));
+        fclose(to_write);
+      }
+    }
+    else if(!strcmp(command, "ls")){
+      char* list_of_files = files_in_current_directory();
+      send(socket_client, list_of_files, 1024, 0);
+      free(list_of_files);
+    }
+    else if(!strcmp(command, "exit")){
+      printf("Finished\n");
+      free(command);
+      free(parametr);
+      break;
+    }
+    else{
+      printf("Command not found!!!\n");
+      free(command);
+      free(parametr);
+      break;
+    }
+    free(command);
+    free(parametr);
   }
-  while((dirp = readdir(dp)) != NULL)
-      printf("%s\n", dirp->d_name);
-  closedir(dp);
 
-  FILE* f = fopen("Sheme.jpg", "rb");
-  size_t nbytes = 0;
-  char *file_data = (char*)malloc(sizeof(char) * CHUNK_SIZE);
-  while((nbytes = fread(file_data, 1, CHUNK_SIZE, f))){
-    bytes_send = send(socket_client, file_data, nbytes, 0);
-  }
+
+
+  
   CLOSESOCKET(listen_socket);
-  printf("Finished\n");
+  CLOSESOCKET(listen_socket_data);
+
+  
 
 
     // sqlite3 *db;
@@ -137,6 +159,7 @@ int main(int argc, char** argv){
     //   sqlite3_free(zErrMsg);
     // }
     // sqlite3_close(db);
+
 
     return 0;
 }

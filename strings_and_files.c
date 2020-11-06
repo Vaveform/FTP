@@ -3,39 +3,48 @@
 // Passes empty pointers of char to parse command and his parametr
 // Generic command - command, which should be parsed
 void parse_command(char* generic_command, char** _command, char** _parametr){
-    // For logging
-    //printf("Input command: %s\n", generic_command);
-    int index = 0;
-    int size_of_symbols = strlen(generic_command);
-    while(index != size_of_symbols - 1){
-        if(generic_command[index] == ' ')
+    //For logging
+    // printf("Input command: %s and her length: %lu\n", generic_command, strlen(generic_command));
+    size_t index = 0;
+    size_t symbols_length = strlen(generic_command);
+    for(;index < symbols_length; index++){
+        if(generic_command[index] == ' '){
             break;
-        index++;
+        }
     }
-    //printf("Index: %d\n", index);
-    char* subbuff1 = (char*)malloc(sizeof(char) * index);
-    char* subbuff2 = (char*)malloc(sizeof(char) * (size_of_symbols - index - 1));
-    memcpy(subbuff1, generic_command, index);
-    memcpy(subbuff2, &generic_command[index + 1], size_of_symbols - index - 1);
-    // printf("Length: %d\n", size_of_symbols - index - 1);
-    // printf("Length: %d\n", strlen(subbuff2));
-    // printf("Type of command: %s\n", subbuff1);
-    // printf("Parametr of command: %s\n", subbuff2);
-    *_command = subbuff1;
-    *_parametr = subbuff2;
+    
+    *_command = (char*)calloc(index, sizeof(char));
+    memcpy(*_command, generic_command, index);
+    
+    
+    size_t parametr_size = strlen(generic_command) - index - 2;
+    
+    if(parametr_size >= 0){
+        
+        *_parametr = (char*)calloc(parametr_size, sizeof(char));
+        memcpy(*_parametr, &generic_command[index + 1], parametr_size);
+    }
+    else
+    {
+        *_parametr = NULL;
+    }
+    //printf("Returned command: %s and returned parametr: %s\n", *_command, *_parametr);
 }
+
 
 // Return 0 if file not found, or 1 if file was found
 int find_file_in_current_directory(char* filename){
     char* curr_dir_path_ = getcwd(NULL, 0);
-    //printf("%d\n", length_of);
+    printf("%s\n", filename);
     DIR* dp;
     struct dirent * dirp;
     if((dp = opendir(curr_dir_path_)) == NULL){
         free(curr_dir_path_);
         return -1;
     }
+    
     while((dirp = readdir(dp)) != NULL){
+        // printf("%s : %s - %d : %d\n", dirp->d_name, filename, strlen(dirp->d_name), strlen(filename));
         if(!strcmp(dirp->d_name, filename)){
             free(curr_dir_path_);
             closedir(dp);
@@ -126,17 +135,46 @@ char* read_from_fp_by_symbol(FILE* fp, char End_of){
     int capacity = 1;
     int position_to_insert = 0;
     char input_symbol;
-    char* my_string = (char*)malloc(sizeof(char) * capacity);
+    char* _string = (char*)malloc(sizeof(char) * capacity);
     while((input_symbol = fgetc(fp)) != End_of){
         if(position_to_insert == capacity){
             capacity *= 2;
-            my_string = realloc(my_string, capacity);
+            _string = realloc(_string, capacity);
         }
-        my_string[position_to_insert++] = input_symbol;
+        _string[position_to_insert++] = input_symbol;
         // Log
         // printf("%d - position, %d - capacity\n", position_to_insert, capacity);
     }
     // Result string
     // printf("%s\n", my_string);
-    return my_string;
+    return _string;
+}
+
+
+// Return dynamic allocated string with list of all files in directory
+char* files_in_current_directory(){
+    char* curr_dir_path_ = getcwd(NULL, 0);
+    DIR* dp;
+    struct dirent * dirp;
+    if((dp = opendir(curr_dir_path_)) == NULL){
+        free(curr_dir_path_);
+        return NULL;
+    }
+    size_t bytes_ = 0;
+    size_t index_to_copy = 0;
+    size_t file_name_len = 0;
+    char* _files = (char*)calloc(sizeof(char), 1);
+    while((dirp = readdir(dp)) != NULL){
+        if(strcmp("..", dirp->d_name) && strcmp(".", dirp->d_name)){
+            file_name_len = strlen(dirp->d_name);
+            bytes_ += (file_name_len * sizeof(char) + 1);
+            _files = realloc(_files, bytes_);
+            memcpy(&_files[index_to_copy], dirp->d_name, file_name_len);
+            _files[bytes_ - 1] = '\n';
+            index_to_copy = bytes_;
+        }
+    }
+    free(curr_dir_path_);
+    closedir(dp);
+    return _files;
 }

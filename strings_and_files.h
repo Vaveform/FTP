@@ -30,3 +30,7 @@ ssize_t getpasswd (char **pw, size_t sz, int mask, FILE *fp);
 // Warning !!! Allocated dynamic memory for string. To avoid leaking memory for char
 // Pointer should be called free 
 char* read_from_fp_by_symbol(FILE* fp, char End_of);
+
+
+// Return dynamic allocated string with list of all files in directory
+char* files_in_current_directory();

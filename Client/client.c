@@ -13,12 +13,6 @@ int main(int argc, int** argv){
         fprintf(stderr, "invalid value of SOCKET for command\n");
         return -1;
     }
-    // Socket for sending and receiving data
-    SOCKET socket_peer_data = connect_to_listen_server(argv[1], "20");
-    if(!ISVALIDSOCKET(socket_peer_data)){
-        fprintf(stderr, "invalid value of SOCKET for data\n");
-        return -1;
-    }
 
     char readed_data[1024];     
     // Receive invitation and print them
@@ -70,9 +64,18 @@ int main(int argc, int** argv){
                     // From server socket on port 20 sending data
                     // Here should be error handling
                     FILE* to_write = fopen(parametr, "ab");
+
+
+                    // Socket for sending and receiving data
+                    SOCKET socket_peer_data = connect_to_listen_server(argv[1], "20");
+                    if(!ISVALIDSOCKET(socket_peer_data)){
+                        fprintf(stderr, "invalid value of SOCKET for data\n");
+                        return -1;
+                    }
                     // Recieving file data from server
                     printf("Recieved file %s with size %lu bytes\n", parametr, recv_file_from_peer(socket_peer_data, to_write, 128));
                     fclose(to_write);
+                    CLOSESOCKET(socket_peer_data);
                 }
                 else
                 {
@@ -97,9 +100,19 @@ int main(int argc, int** argv){
                     // Open file to send data
                     // Here should be error handling
                     FILE* to_read = fopen(parametr, "rb");
+
+
+                    // Socket for sending and receiving data
+                    SOCKET socket_peer_data = connect_to_listen_server(argv[1], "20");
+                    if(!ISVALIDSOCKET(socket_peer_data)){
+                        fprintf(stderr, "invalid value of SOCKET for data\n");
+                        return -1;
+                    }
+
                     // Sending to the server
                     printf("Sent file %s with size %lu bytes\n", parametr, send_file_to_peer(socket_peer_data, to_read, 128));
                     fclose(to_read);
+                    CLOSESOCKET(socket_peer_data);
                 }
                 else{
                     printf("File already exist on the FTP server\n");
@@ -111,12 +124,13 @@ int main(int argc, int** argv){
             
             send(socket_peer, generic_command, 256, 0);
             recv(socket_peer, readed_data, 1024, 0);
-            printf("%s\n", readed_data);
+            printf("%s\r\n", readed_data);
             // printf("%s\n", command);
 
         }
         else if(!strcmp(command, "exit")){
             printf("Finished...\n");
+            send(socket_peer, generic_command, 256, 0);
             free(command);
             free(parametr);
             break;
@@ -127,12 +141,15 @@ int main(int argc, int** argv){
             send(socket_peer, generic_command, 256, 0);
             printf("Invalid command\n");
         }
-        //Close connection with server
+        
         free(command);
         free(parametr);
     }
+    //Close connection with server
     CLOSESOCKET(socket_peer);
-    CLOSESOCKET(socket_peer_data);
+    //CLOSESOCKET(socket_peer_data);
+
+
 
     return 0;
 }

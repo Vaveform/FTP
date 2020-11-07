@@ -8,21 +8,24 @@ void parse_command(char* generic_command, char** _command, char** _parametr){
     size_t index = 0;
     size_t symbols_length = strlen(generic_command);
     for(;index < symbols_length; index++){
-        if(generic_command[index] == ' '){
+        if(generic_command[index] == ' ' || generic_command[index] == '\n'){
             break;
         }
     }
     
     *_command = (char*)calloc(index, sizeof(char));
     memcpy(*_command, generic_command, index);
+    // printf("Command: %s and length: %lu\n", *_command, strlen(*_command));
     
+    int parametr_size = strlen(generic_command) - index - 2;
+
+    //printf("Parametr size: %lu and index: %d\n", parametr_size, index);
     
-    size_t parametr_size = strlen(generic_command) - index - 2;
-    
-    if(parametr_size >= 0){
+    if(parametr_size > 0){
         
-        *_parametr = (char*)calloc(parametr_size, sizeof(char));
-        memcpy(*_parametr, &generic_command[index + 1], parametr_size);
+        *_parametr = (char*)calloc((size_t)parametr_size, sizeof(char));
+        memcpy(*_parametr, &generic_command[index + 1],(size_t)parametr_size);
+        // printf("Argument: %s and length: %lu\n", *_parametr, strlen(*_parametr));
     }
     else
     {

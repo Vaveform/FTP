@@ -20,8 +20,8 @@ int main(int argc, char** argv){
   //   printf("Not enough parametrs to launch\n");
   //   return 0;
   // }
-  // printf("This is FTP-server\n");
-  // printf("Binding server to the IP-address: %s and Port: 21\n", argv[1]);
+  printf("This is FTP-server\n");
+  printf("Binding server to the IP-address: %s and Port: 21\n", argv[1]);
   
   SOCKET listen_socket = create_listen_socket(argv[1], "21", 10);
   if(!ISVALIDSOCKET(listen_socket)){
@@ -44,20 +44,14 @@ int main(int argc, char** argv){
   // Programm blocked until new input connection
   SOCKET socket_client = accept(listen_socket, (struct sockaddr*)&client_address, &client_len);
 
+  puts("Connected!!!\n");
+  
+
   if(!ISVALIDSOCKET(socket_client)){
     fprintf(stderr, "accept() for listen_socket failed. (%d)\n", GETSOCKETERRNO());
     CLOSESOCKET(listen_socket);
     return 1;
   }
-
-  SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
-
-  if(!ISVALIDSOCKET(socket_client_data)){
-    fprintf(stderr, "accept() for listen_socket_data failed. (%d)\n", GETSOCKETERRNO());
-    CLOSESOCKET(listen_socket_data);
-    return 1;
-  }
-
   printf("Client is connected...\n");
   char address_buffer[100];
   getnameinfo((struct sockaddr*)&client_address, client_len, address_buffer, sizeof(address_buffer), 0, 0, NI_NUMERICHOST);
@@ -91,8 +85,16 @@ int main(int argc, char** argv){
         send(socket_client, &flag_operation, sizeof(int), 0);
         // Her should be error handling
         FILE* to_read = fopen(parametr, "rb");
+
+        SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
+        if(!ISVALIDSOCKET(socket_client_data)){
+          fprintf(stderr, "accept() for listen_socket_data failed. (%d)\n", GETSOCKETERRNO());
+          CLOSESOCKET(listen_socket_data);
+          return 1;
+        }
         printf("Sent file with name %s to client with size: %lu bytes\n", parametr, send_file_to_peer(socket_client_data, to_read, 128));
         fclose(to_read);
+        CLOSESOCKET(socket_client_data);
       }
     }
     else if(!strcmp(command, "put")){
@@ -105,8 +107,16 @@ int main(int argc, char** argv){
         flag_operation = 1;
         send(socket_client, &flag_operation, sizeof(int), 0);
         FILE* to_write = fopen(parametr, "ab");
+
+        SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
+        if(!ISVALIDSOCKET(socket_client_data)){
+          fprintf(stderr, "accept() for listen_socket_data failed. (%d)\n", GETSOCKETERRNO());
+          CLOSESOCKET(listen_socket_data);
+          return 1;
+        }
         printf("Received file with name %s from client with size: %lu bytes\n", parametr, recv_file_from_peer(socket_client_data, to_write, 128));
         fclose(to_write);
+        CLOSESOCKET(socket_client_data);
       }
     }
     else if(!strcmp(command, "ls")){

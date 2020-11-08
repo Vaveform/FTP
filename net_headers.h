@@ -13,15 +13,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 #define ISVALIDSOCKET(s) ((s) >= 0)
 #define CLOSESOCKET(s) close(s)
 #define SOCKET int
 #define GETSOCKETERRNO() (errno)
 
+#define CHUNK_SIZE 128
+
+char* current_time_system();
+
 struct addrinfo create_addrinfo_pattern(int _protocol_family, int _socktype, int _flags);
 
-SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiting_connections);
+// Return descriptor of open listen socket. Argument fp for logging
+SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiting_connections, FILE* fp);
 
 // Connect to listen server and return socket of connection(client)
 // Listen server should be bind to passing ip_address and port

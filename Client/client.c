@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../net_headers.h"
-
 #include "../strings_and_files.h"
 
 int main(int argc, int** argv){
@@ -39,11 +38,12 @@ int main(int argc, int** argv){
     // get filename - load file from server directory
     // ls - list of the files in the server directory
     // Code near emulate active communication mode 
-    char generic_command[256];
+    char generic_command[COMMAND_SIZE];
     char* command, *parametr;
     int flag_operation;
     while(1){
-        fgets(generic_command, 256, stdin);
+        printf("Command to FTP-server: ");
+        fgets(generic_command, COMMAND_SIZE, stdin);
         printf("Printed command: %s\n", generic_command);
         parse_command(generic_command, &command, &parametr);
         //printf("command: %s command_strlen: %lu; parametr: %s parametr_strlen: %lu\n", command,strlen(command), parametr, strlen(parametr));
@@ -56,7 +56,7 @@ int main(int argc, int** argv){
             else{
                 // We should send to the ftp server name of the file
                 // Server found/not found the file and send him to the client by binded socket 21
-                send(socket_peer, generic_command, 256, 0);
+                send(socket_peer, generic_command, COMMAND_SIZE, 0);
                 // Response from server - int number
                 recv(socket_peer, &flag_operation, sizeof(int), 0);
                 // If flag_operation not zero
@@ -73,7 +73,7 @@ int main(int argc, int** argv){
                         return -1;
                     }
                     // Recieving file data from server
-                    printf("Recieved file %s with size %lu bytes\n", parametr, recv_file_from_peer(socket_peer_data, to_write, 128));
+                    printf("Recieved file %s with size %lu bytes\n", parametr, recv_file_from_peer(socket_peer_data, to_write, CHUNK_SIZE));
                     fclose(to_write);
                     CLOSESOCKET(socket_peer_data);
                 }
@@ -93,7 +93,7 @@ int main(int argc, int** argv){
             else{
                 // printf("%s with %s\n", command, parametr);
                 // Sending command to the server
-                send(socket_peer, generic_command, 256, 0);
+                send(socket_peer, generic_command, COMMAND_SIZE, 0);
                 // Response from server - int number - server ready to recv file
                 recv(socket_peer, &flag_operation, sizeof(int), 0);
                 if(flag_operation){
@@ -110,7 +110,7 @@ int main(int argc, int** argv){
                     }
 
                     // Sending to the server
-                    printf("Sent file %s with size %lu bytes\n", parametr, send_file_to_peer(socket_peer_data, to_read, 128));
+                    printf("Sent file %s with size %lu bytes\n", parametr, send_file_to_peer(socket_peer_data, to_read, CHUNK_SIZE));
                     fclose(to_read);
                     CLOSESOCKET(socket_peer_data);
                 }
@@ -122,7 +122,7 @@ int main(int argc, int** argv){
         else if(!strcmp(command, "ls")){
             // List of the file on the server
             
-            send(socket_peer, generic_command, 256, 0);
+            send(socket_peer, generic_command, COMMAND_SIZE, 0);
             recv(socket_peer, readed_data, 1024, 0);
             printf("%s\r\n", readed_data);
             // printf("%s\n", command);
@@ -130,7 +130,7 @@ int main(int argc, int** argv){
         }
         else if(!strcmp(command, "exit")){
             printf("Finished...\n");
-            send(socket_peer, generic_command, 256, 0);
+            send(socket_peer, generic_command, COMMAND_SIZE, 0);
             free(command);
             free(parametr);
             break;
@@ -138,7 +138,7 @@ int main(int argc, int** argv){
         }
         else
         {
-            send(socket_peer, generic_command, 256, 0);
+            //send(socket_peer, generic_command, 256, 0);
             printf("Invalid command\n");
         }
         

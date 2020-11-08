@@ -1,5 +1,12 @@
 #include "net_headers.h"
 
+char* current_time_system(){
+    time_t timer;
+    time(&timer);
+    char *time_msg = ctime(&timer);
+    return time_msg;
+}
+
 struct addrinfo create_addrinfo_pattern(int _protocol_family, int _socktype, int _flags){
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
@@ -9,22 +16,26 @@ struct addrinfo create_addrinfo_pattern(int _protocol_family, int _socktype, int
     return hints;
 }
 
-SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiting_connections){
+// Return descriptor of open listen socket. Argument fp for logging
+SOCKET create_listen_socket(char* address, char* port_name, int max_number_waiting_connections, FILE* fp){
     struct addrinfo* bind_addresses;
     struct addrinfo hints = create_addrinfo_pattern(AF_INET, SOCK_STREAM, AI_PASSIVE);
     getaddrinfo(address, port_name, &hints, &bind_addresses);
     SOCKET socket_listen = socket(bind_addresses->ai_family, bind_addresses->ai_socktype, bind_addresses->ai_protocol);
     if(!ISVALIDSOCKET(socket_listen)){
-        fprintf(stderr, "socket() failed. (%d)\n", GETSOCKETERRNO());
+        if(fp)
+            fprintf(fp, "%s: socket() failed. (%d)\n",current_time_system(), GETSOCKETERRNO());
         return -1;
     }
     if(bind(socket_listen, bind_addresses->ai_addr, bind_addresses->ai_addrlen)){
-        fprintf(stderr, "bind() failed. (%d)\n", GETSOCKETERRNO());
+        if(fp)
+            fprintf(fp, "%s: bind() failed. (%d)\n", current_time_system(), GETSOCKETERRNO());
         return -1;
     }
     freeaddrinfo(bind_addresses);
     if(listen(socket_listen, max_number_waiting_connections) < 0){
-        fprintf(stderr, "listen() failed. (%d)\n", GETSOCKETERRNO());
+        if(fp)
+            fprintf(fp, "%s: listen() failed. (%d)\n", current_time_system(), GETSOCKETERRNO());
         return -1;
     }
     return socket_listen;

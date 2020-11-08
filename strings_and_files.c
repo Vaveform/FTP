@@ -38,7 +38,7 @@ void parse_command(char* generic_command, char** _command, char** _parametr){
 // Return 0 if file not found, or 1 if file was found
 int find_file_in_current_directory(char* filename){
     char* curr_dir_path_ = getcwd(NULL, 0);
-    printf("%s\n", filename);
+    // printf("%s\n", filename);
     DIR* dp;
     struct dirent * dirp;
     if((dp = opendir(curr_dir_path_)) == NULL){
@@ -133,10 +133,10 @@ ssize_t getpasswd (char **pw, size_t sz, int mask, FILE *fp)
 
 // Read string to the delimiter End_of from the file (stream or real file)
 // Warning !!! Allocated dynamic memory for string. To avoid leaking memory for char
-// Pointer should be called free 
+// Pointer should be called free
 char* read_from_fp_by_symbol(FILE* fp, char End_of){
-    int capacity = 1;
-    int position_to_insert = 0;
+    size_t capacity = 1;
+    size_t position_to_insert = 0;
     char input_symbol;
     char* _string = (char*)malloc(sizeof(char) * capacity);
     while((input_symbol = fgetc(fp)) != End_of){
@@ -150,6 +150,7 @@ char* read_from_fp_by_symbol(FILE* fp, char End_of){
     }
     // Result string
     // printf("%s\n", my_string);
+    _string = realloc(_string, position_to_insert);
     return _string;
 }
 

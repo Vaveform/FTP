@@ -10,6 +10,8 @@
 #include <dirent.h>
 
 
+#define COMMAND_SIZE 256
+
 // Passes empty pointers of char to parse command and his parametr
 // Generic command - command, which should be parsed
 void parse_command(char* generic_command, char** _command, char** _parametr);
@@ -28,7 +30,7 @@ ssize_t getpasswd (char **pw, size_t sz, int mask, FILE *fp);
 
 // Read string to the delimiter End_of from the file (stream or real file)
 // Warning !!! Allocated dynamic memory for string. To avoid leaking memory for char
-// Pointer should be called free 
+// Pointer should be called free. 
 char* read_from_fp_by_symbol(FILE* fp, char End_of);
 
 

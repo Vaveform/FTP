@@ -7,16 +7,26 @@
 #include <pthread.h>
 #include "../net_headers.h"
 #include "../strings_and_files.h"
+#include "sqlite3.h"
 
+static long last_user_id = 0;
 
-static int callback(void *NotUsed, int argc, char **argv, char **azColName){
+// To convert string value to int (long) : (int) strtol(argv[i], (char **)NULL, 10);
+
+// Function for access to values
+int callback(void *NotUsed, int argc, char **argv, char **azColName){
     int i;
     for(i=0; i<argc; i++){
-      printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+      if(i == argc - 1)
+        printf("%s", argv[i]);
+      else
+        printf("%s,\t", argv[i]);
     }
     printf("\n");
     return 0;
 }
+
+
 
 void* admin_working (void* params){
   printf("Welcome to admin CLI FTP-server\n");
@@ -28,12 +38,94 @@ void* admin_working (void* params){
   pthread_exit(0);
 }
 
+sqlite3* open_database(const char* database_name, const char* user_data_table_name){
+  sqlite3* db;
+  char *ErrMsg = NULL;
+  int rc = sqlite3_open(database_name, &db);
+  if(rc){
+    sqlite3_close(db);
+    return NULL;
+  }
+  const size_t request_s = 14;
+  const char find_table_request[request_s] = "SELECT * FROM ";
+  size_t input_table_name = strlen(user_data_table_name);
+  char* full_request = (char*)calloc(request_s + input_table_name, sizeof(char));
+  strncat(full_request, find_table_request, request_s);
+  strncat(full_request, user_data_table_name, input_table_name);
+  printf("Request: %s\n", full_request);
+  rc = sqlite3_exec(db, full_request, callback, 0, &ErrMsg);
+  if( rc ){
+    free(full_request);
+    const size_t first_part = 13;
+    const char create_table_request[first_part] = "CREATE TABLE ";
+    const size_t third_part = 76;
+    const char table_configuration[third_part] = " (user_id INTEGER PRIMARY KEY, login TEXT NOT NULL, password TEXT NOT NULL);";
+    
+    char* full_request = (char*)calloc(first_part + third_part + input_table_name, sizeof(char));
+    strncat(full_request, create_table_request, first_part);
+    strncat(full_request,user_data_table_name, input_table_name);
+    strncat(full_request, table_configuration, third_part);
+    printf("Request: %s\n", full_request);
+    rc = sqlite3_exec(db, full_request, callback, 0, &ErrMsg);
+    free(full_request);
+    if(rc){
+      sqlite3_close(db);
+      return NULL;
+    }
+    return db;
+  }
+  free(full_request);
+  return db;
+
+} 
+
+
+long current_users_number(sqlite3* db, const char* table_name){
+  if(db!= NULL){
+    const size_t first_part = 21;
+    const char request[first_part] = "SELECT COUNT(*) FROM ";
+    size_t second_part = strlen(table_name); 
+    char* full_request = (char*)calloc(first_part + second_part, sizeof(char));
+
+    sqlite3_exec(db , "SELECT COUNT(*) FROM")
+  }
+
+}
+
+sqlite3* add_user(sqlite3* db, const char* login, const char* password){
+
+}
+
+void find_table(){
+    sqlite3 *db;
+    char *zErrMsg = 0;
+    int rc;
+    rc = sqlite3_open("users", &db);
+    if( rc ){
+      fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+      sqlite3_close(db);
+      return 1;
+    }
+    const char request[] = "SELECT COUNT(*) FROM data_autorization;";
+    //const char request[] = "INSERT INTO data_autorization (user_id, login, password) VALUES (0, \"Obama\", \"rtx2080\");";
+    //const char request[] = "CREATE TABLE data_autorization (user_id INTEGER PRIMARY KEY, login TEXT NOT NULL, password TEXT NOT NULL);";
+    //const char request[] = "SELECT * FROM data_autorization";
+    rc = sqlite3_exec(db, &request, callback, 0, &zErrMsg);
+    if( rc!=SQLITE_OK ){
+      fprintf(stderr, "SQL error: %s\n", zErrMsg);
+      sqlite3_free(zErrMsg);
+    }
+    sqlite3_close(db);
+}
+
 
 int main(int argc, char** argv){
   pthread_t tid;
   pthread_attr_t attr;
   pthread_attr_init(&attr);
   pthread_create(&tid, &attr, admin_working, NULL);
+
+  
   FILE* logs = fopen("logs", "a+");
   fprintf(logs, "%s: Starting FTP Server", current_time_system());
   
@@ -170,27 +262,10 @@ int main(int argc, char** argv){
   
 
 
-    // sqlite3 *db;
-    // char *zErrMsg = 0;
-    // int rc;
-    // if( argc!=3 ){
-    //   fprintf(stderr, "Usage: %s DATABASE SQL-STATEMENT\n", argv[0]);
-    //   return(1);
-    // }
-    // rc = sqlite3_open(argv[1], &db);
-    // if( rc ){
-    //   fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-    //   sqlite3_close(db);
-    //   return 1;
-    // }
-    // const char request[] = "CREATE TABLE contacts (column_1 data_type PRIMARY KEY, column_2 data_type NOT NULL, column_3 data_type DEFAULT 0,table_constraints);";
-    // rc = sqlite3_exec(db, &request, callback, 0, &zErrMsg);
-    // if( rc!=SQLITE_OK ){
-    //   fprintf(stderr, "SQL error: %s\n", zErrMsg);
-    //   sqlite3_free(zErrMsg);
-    // }
-    // sqlite3_close(db);
-
+  // sqlite3* db = open_database("users", "autorization_data");
+  // if(db == NULL)
+  //   puts("Error!!!\n");
+  // sqlite3_close(db);
 
     return 0;
 }

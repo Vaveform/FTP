@@ -8,23 +8,10 @@
 #include "../net_headers.h"
 #include "../strings_and_files.h"
 #include "sqlite3.h"
+#include "db_user_autorization.h"
 
-static long last_user_id = 0;
 
 // To convert string value to int (long) : (int) strtol(argv[i], (char **)NULL, 10);
-
-// Function for access to values
-int callback(void *NotUsed, int argc, char **argv, char **azColName){
-    int i;
-    for(i=0; i<argc; i++){
-      if(i == argc - 1)
-        printf("%s", argv[i]);
-      else
-        printf("%s,\t", argv[i]);
-    }
-    printf("\n");
-    return 0;
-}
 
 
 
@@ -38,88 +25,21 @@ void* admin_working (void* params){
   pthread_exit(0);
 }
 
-sqlite3* open_database(const char* database_name, const char* user_data_table_name){
-  sqlite3* db;
-  char *ErrMsg = NULL;
-  int rc = sqlite3_open(database_name, &db);
-  if(rc){
-    sqlite3_close(db);
-    return NULL;
-  }
-  const size_t request_s = 14;
-  const char find_table_request[request_s] = "SELECT * FROM ";
-  size_t input_table_name = strlen(user_data_table_name);
-  char* full_request = (char*)calloc(request_s + input_table_name, sizeof(char));
-  strncat(full_request, find_table_request, request_s);
-  strncat(full_request, user_data_table_name, input_table_name);
-  printf("Request: %s\n", full_request);
-  rc = sqlite3_exec(db, full_request, callback, 0, &ErrMsg);
-  if( rc ){
-    free(full_request);
-    const size_t first_part = 13;
-    const char create_table_request[first_part] = "CREATE TABLE ";
-    const size_t third_part = 76;
-    const char table_configuration[third_part] = " (user_id INTEGER PRIMARY KEY, login TEXT NOT NULL, password TEXT NOT NULL);";
-    
-    char* full_request = (char*)calloc(first_part + third_part + input_table_name, sizeof(char));
-    strncat(full_request, create_table_request, first_part);
-    strncat(full_request,user_data_table_name, input_table_name);
-    strncat(full_request, table_configuration, third_part);
-    printf("Request: %s\n", full_request);
-    rc = sqlite3_exec(db, full_request, callback, 0, &ErrMsg);
-    free(full_request);
-    if(rc){
-      sqlite3_close(db);
-      return NULL;
-    }
-    return db;
-  }
-  free(full_request);
-  return db;
-
-} 
-
-
-long current_users_number(sqlite3* db, const char* table_name){
-  if(db!= NULL){
-    const size_t first_part = 21;
-    const char request[first_part] = "SELECT COUNT(*) FROM ";
-    size_t second_part = strlen(table_name); 
-    char* full_request = (char*)calloc(first_part + second_part, sizeof(char));
-
-    sqlite3_exec(db , "SELECT COUNT(*) FROM")
-  }
-
-}
-
-sqlite3* add_user(sqlite3* db, const char* login, const char* password){
-
-}
-
-void find_table(){
-    sqlite3 *db;
-    char *zErrMsg = 0;
-    int rc;
-    rc = sqlite3_open("users", &db);
-    if( rc ){
-      fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-      sqlite3_close(db);
-      return 1;
-    }
-    const char request[] = "SELECT COUNT(*) FROM data_autorization;";
-    //const char request[] = "INSERT INTO data_autorization (user_id, login, password) VALUES (0, \"Obama\", \"rtx2080\");";
-    //const char request[] = "CREATE TABLE data_autorization (user_id INTEGER PRIMARY KEY, login TEXT NOT NULL, password TEXT NOT NULL);";
-    //const char request[] = "SELECT * FROM data_autorization";
-    rc = sqlite3_exec(db, &request, callback, 0, &zErrMsg);
-    if( rc!=SQLITE_OK ){
-      fprintf(stderr, "SQL error: %s\n", zErrMsg);
-      sqlite3_free(zErrMsg);
-    }
-    sqlite3_close(db);
-}
-
 
 int main(int argc, char** argv){
+  // char* selectall = SELECT_ALL_FROM_TABLE("data_autoasdrization");
+  // char* create_tab = CREATE_TABLE_BY_CONCRETE_PATTERN("datasdfs_autorization");
+  // char* find_us = FIND_USER_BY_LOGIN_AND_PASSWORD("data_autorizatsdfion", "Dotasdfsd", "ghpsdfsdfewg");
+  // char* add_us = ADD_USER_TO_DATABASE("data_ausdftorization", 13512346, "dsfvsDota", "asdsaassadcx", "127.0.0.1");
+  // printf("Test select all: %s\n", selectall);
+  // printf("Test create_table: %s\n", create_tab);
+  // printf("Test find user: %s\n", find_us);
+  // printf("Test add user: %s\n", add_us);
+  // free(selectall);
+  // free(create_tab);
+  // free(find_us);
+  // free(add_us);
+
   pthread_t tid;
   pthread_attr_t attr;
   pthread_attr_init(&attr);
@@ -260,11 +180,25 @@ int main(int argc, char** argv){
   pthread_join(tid, NULL);
   printf("Main thread finishing...\n");
   
+  // const char* db_name = "users";
+  // const char* table_name = "autorization_data";
 
-
-  // sqlite3* db = open_database("users", "autorization_data");
-  // if(db == NULL)
+  // sqlite3* db = open_database(db_name, table_name);
+  // if(db == NULL){
   //   puts("Error!!!\n");
+  //   return 1;
+  // }
+  // int p = add_user(db, table_name, "Maksim", "ewrwer", "127.0.0.1");
+  // printf("%d\n", p);
+  // p = add_user(db, table_name, "Obama", "dsfsdfvc", "192.168.0.1");
+  // printf("%d\n", p);
+  // print_table(db, table_name);
+  // if(find_concrete_user(db, table_name, "Maksim", "ewrwer")){
+  //   puts("User Maksim found!!!\n");
+  // }
+  // if(!find_concrete_user(db, table_name, "Maksim", "ssssss")){
+  //   puts("undifined!!!\n");
+  // }
   // sqlite3_close(db);
 
     return 0;

@@ -13,31 +13,36 @@ int main(int argc, int** argv){
         return -1;
     }
 
+
     char readed_data[1024];     
     // Receive invitation and print them
     int bytes_recieved = recv(socket_peer, readed_data, 1024, 0);
     printf("%s", readed_data);
+    memset(readed_data, 0, sizeof(readed_data));
     // Invitation to input login:
     printf("Login: ");
     fgets(readed_data, 1024, stdin);
-    // Sending input login
-    int bytes_send = send(socket_peer, readed_data, 1024, 0);
     // Invitation to input password
     printf("Password: ");
     // Creating pointer of buffer 'readed data' for function getpasswrd
-    char* pointer_to_password = readed_data;
+    size_t tmp_length = strlen(readed_data);
+    char* pointer_to_password = &readed_data[tmp_length];
+    
     // Call function getpasswd - inputing password with hide symbols
-    getpasswd(&pointer_to_password, 1024, '*', stdin);
+    getpasswd(&pointer_to_password, 1024 - tmp_length, '*', stdin);
     // Sending password
-    bytes_send = send(socket_peer, readed_data, 1024, 0);
+    int bytes_send = send(socket_peer, readed_data, 1024, 0);
     printf("\n");
+    memset(readed_data, 0, sizeof(readed_data));
+    recv(socket_peer, readed_data, 1024, 0);
+    printf("%s\n", readed_data);
     
 
-    // command line interface:
-    // put filename - sending file to ftp server
-    // get filename - load file from server directory
-    // ls - list of the files in the server directory
-    // Code near emulate active communication mode 
+    // // command line interface:
+    // // put filename - sending file to ftp server
+    // // get filename - load file from server directory
+    // // ls - list of the files in the server directory
+    // // Code near emulate active communication mode 
     char generic_command[COMMAND_SIZE];
     char* command, *parametr;
     int flag_operation;

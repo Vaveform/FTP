@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <poll.h>
 // Sorry in GCC have not C11 threads support
 // So i use POSIX standard
 #include <pthread.h>
@@ -10,23 +11,192 @@
 #include "sqlite3.h"
 #include "db_user_autorization.h"
 
+const char* unkn_command = "Unknown server command";
+
+// Declarated database names and table with user information
+const char* db_name = "users";
+const char* table_name = "autorization_data";
+
+
+// Output tokens after user autorization
+const char* good_result_autorization = "You are successfully login";
+const char* bad_result_autorization = "You not found in server database";
+
+// server_status = 1 - server running and waiting connections
+// server_status = 0 - server stopped
+int server_status = 1;
+
+
+// Structure with server parametr to pass in other thread
+typedef struct system_parametrs{
+  int server_status;
+  sqlite3* open_database;
+  const char* name_of_table;
+} system_parametrs;
 
 // To convert string value to int (long) : (int) strtol(argv[i], (char **)NULL, 10);
 
 
+const char* invitation = 
+    "Welcome to FTP server!!!\n"
+    "To enter, please input login and password.\r\n";
 
-void* admin_working (void* params){
+
+
+void* admin_command_interface (void* params){
   printf("Welcome to admin CLI FTP-server\n");
-  printf("Server: ");
+  system_parametrs* parametrs = params;
   char some_command[256];
-  fgets(some_command, 256, stdin);
-  printf("Command: %s\n", some_command);
+  char* command, *parametr;
+  while(parametrs->server_status){
+    printf("Server: ");
+    fgets(some_command, 256, stdin);
+    
+    parse_command(some_command, &command, &parametr);
+
+    printf("Command: %s\n", command);
+    if(!strcmp(command, "users")){
+      printf("Total number of registred users: %lu\n", get_new_user_id());
+      print_table(parametrs->open_database, parametrs->name_of_table);
+    }
+    else if(!strcmp(command, "stop")){
+      printf("Stopping server\n");
+      parametrs->server_status = 0;
+    }
+    else{
+      printf("Invalid token\n");
+    }
+    free(command);
+    free(parametr);
+  }
   printf("Admin CLI finishing...\n");
   pthread_exit(0);
 }
 
+int abort_all_users(fd_set* users, SOCKET max_socket_){
+  int number_of_users = 0;
+  for(SOCKET i = 1; i <= max_socket_; i++){
+    if(FD_ISSET(i, users)){
+      number_of_users++;
+      CLOSESOCKET(i);
+      FD_CLR(i, users);
+    }
+  }
+  return number_of_users;
+}
+
+
 
 int main(int argc, char** argv){
+
+  // thread inditifier
+  pthread_t tid;
+
+
+  // Init attr
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  
+
+  // Open database
+  sqlite3* database = open_database(db_name, table_name);
+  if(database == NULL){
+    printf("Here\n");
+    return 1;
+  }
+  system_parametrs parametrs;
+  parametrs.server_status = server_status;
+  parametrs.open_database = database;
+  parametrs.name_of_table = table_name;
+  pthread_create(&tid, &attr, admin_command_interface, &parametrs);
+
+  // Configuring server
+  SOCKET listen_socket = create_listen_socket(argv[1], "21", 10, NULL);
+  char input_data[1024];
+  char generic_command[COMMAND_SIZE];
+  char* login = NULL, *password = NULL;
+  char* command, *parametr;
+  int flag_operation;
+  fd_set unknown_sockets, autorizated_sockets;
+  FD_ZERO(&unknown_sockets);
+  FD_ZERO(&autorizated_sockets);
+  FD_SET(listen_socket, &autorizated_sockets);
+  SOCKET max_socket = listen_socket;
+  struct timeval tv;
+  tv.tv_sec = 1;
+  tv.tv_usec = 500000;
+  while(parametrs.server_status ){
+    
+    fd_set copy_autorizated = autorizated_sockets;
+    fd_set copy_unknown = unknown_sockets;
+    if(select(max_socket + 1, &copy_autorizated, &copy_unknown, 0, &tv) < 0){
+      //printf("Select error\n");
+      break;
+    }
+    for(SOCKET i = 1; i <= max_socket; i++){
+      if(FD_ISSET(i, &copy_autorizated)){
+        if(i == listen_socket){
+          // Adding new user
+          SOCKET new_client = accept(listen_socket, NULL, NULL);
+          FD_SET(new_client, &unknown_sockets);
+          send(new_client, invitation, strlen(invitation), 0);
+          if(new_client > max_socket)
+            max_socket = new_client;
+        }
+        else{
+          // Working with responses
+          int bytes_received = recv(i, generic_command, COMMAND_SIZE, 0);
+          if(bytes_received < 1)
+            continue;
+          parse_command(generic_command, &command, &parametr);
+          if(!strcmp(command, "ls")){
+            char* list_of_files = files_in_current_directory();
+            send(i, list_of_files, 1024, 0);
+            free(list_of_files);
+          }
+          else{
+            send(i, unkn_command, strlen(unkn_command), 0);
+          }
+        }
+      }
+      else if(FD_ISSET(i, &copy_unknown)){
+        int recv_bytes = recv(i, input_data, 1024, 0);
+        if(recv_bytes < 1){
+          continue;
+        }
+        
+
+        parse_command(input_data, &login, &password);
+        if(login != NULL && password == NULL){
+          free(login);
+          continue;
+        }
+        if(login == NULL || password == NULL)
+          continue;
+        if(find_concrete_user(database, table_name, login, password) == 1){
+          send(i, good_result_autorization, strlen(good_result_autorization), 0);
+          FD_CLR(i, &unknown_sockets);
+          FD_SET(i, &autorizated_sockets);
+        }
+        else{
+          send(i, bad_result_autorization, strlen(bad_result_autorization), 0);
+          FD_CLR(i, &unknown_sockets);
+          CLOSESOCKET(i);
+        }
+        free(login);
+        free(password);
+      }
+    }
+  }
+  
+  pthread_join(tid, NULL);
+  printf("Admin thread finished\n");
+  abort_all_users(&autorizated_sockets, max_socket);
+  abort_all_users(&unknown_sockets, max_socket);
+  sqlite3_close(database);
+  CLOSESOCKET(listen_socket);
+
+
   // char* selectall = SELECT_ALL_FROM_TABLE("data_autoasdrization");
   // char* create_tab = CREATE_TABLE_BY_CONCRETE_PATTERN("datasdfs_autorization");
   // char* find_us = FIND_USER_BY_LOGIN_AND_PASSWORD("data_autorizatsdfion", "Dotasdfsd", "ghpsdfsdfewg");
@@ -40,145 +210,145 @@ int main(int argc, char** argv){
   // free(find_us);
   // free(add_us);
 
-  pthread_t tid;
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_create(&tid, &attr, admin_working, NULL);
+  // pthread_t tid;
+  // pthread_attr_t attr;
+  // pthread_attr_init(&attr);
+  // pthread_create(&tid, &attr, admin_working, NULL);
 
   
-  FILE* logs = fopen("logs", "a+");
-  fprintf(logs, "%s: Starting FTP Server", current_time_system());
+  // FILE* logs = fopen("logs", "a+");
+  // fprintf(logs, "%s: Starting FTP Server", current_time_system());
   
-  SOCKET listen_socket = create_listen_socket(argv[1], "21", 10, logs);
-  if(!ISVALIDSOCKET(listen_socket)){
-    fprintf(logs, "%s: Invalid listen_socket value. (%d)\n", current_time_system(), GETSOCKETERRNO());
-    fclose(logs);
-    return 1;
-  }
-  SOCKET listen_socket_data = create_listen_socket(argv[1], "20", 10, logs);
-  if(!ISVALIDSOCKET(listen_socket_data)){
-    fprintf(logs, "%s: Invalid listen_socket_data value. (%d)\n", current_time_system(), GETSOCKETERRNO());
-    fclose(logs);
-    return 1;
-  }
+  // SOCKET listen_socket = create_listen_socket(argv[1], "21", 10, logs);
+  // if(!ISVALIDSOCKET(listen_socket)){
+  //   fprintf(logs, "%s: Invalid listen_socket value. (%d)\n", current_time_system(), GETSOCKETERRNO());
+  //   fclose(logs);
+  //   return 1;
+  // }
+  // SOCKET listen_socket_data = create_listen_socket(argv[1], "20", 10, logs);
+  // if(!ISVALIDSOCKET(listen_socket_data)){
+  //   fprintf(logs, "%s: Invalid listen_socket_data value. (%d)\n", current_time_system(), GETSOCKETERRNO());
+  //   fclose(logs);
+  //   return 1;
+  // }
 
 
-  fprintf(logs, "%s: Waiting a connection...\n", current_time_system());
-  // client_address - to store address info for the connecting client
-  struct sockaddr_storage client_address;
-  // To call accept and getnameinfo it is neccessary to pass size of client_address
-  socklen_t client_len = sizeof(client_address);
+  // fprintf(logs, "%s: Waiting a connection...\n", current_time_system());
+  // // client_address - to store address info for the connecting client
+  // struct sockaddr_storage client_address;
+  // // To call accept and getnameinfo it is neccessary to pass size of client_address
+  // socklen_t client_len = sizeof(client_address);
 
 
-  // Programm blocked until new input connection
-  SOCKET socket_client = accept(listen_socket, (struct sockaddr*)&client_address, &client_len);
+  // // Programm blocked until new input connection
+  // SOCKET socket_client = accept(listen_socket, (struct sockaddr*)&client_address, &client_len);
 
-  fprintf(logs, "%s: Connected!!!\n", current_time_system());
+  // fprintf(logs, "%s: Connected!!!\n", current_time_system());
   
 
-  if(!ISVALIDSOCKET(socket_client)){
-    fprintf(logs, "%s: accept() for listen_socket failed. (%d)\n",current_time_system(), GETSOCKETERRNO());
-    CLOSESOCKET(listen_socket);
-    fclose(logs);
-    return 1;
-  }
+  // if(!ISVALIDSOCKET(socket_client)){
+  //   fprintf(logs, "%s: accept() for listen_socket failed. (%d)\n",current_time_system(), GETSOCKETERRNO());
+  //   CLOSESOCKET(listen_socket);
+  //   fclose(logs);
+  //   return 1;
+  // }
 
-  fprintf(logs, "%s: Client is connected...\n", current_time_system());
-  char address_buffer[100];
-  getnameinfo((struct sockaddr*)&client_address, client_len, address_buffer, sizeof(address_buffer), 0, 0, NI_NUMERICHOST);
+  // fprintf(logs, "%s: Client is connected...\n", current_time_system());
+  // char address_buffer[100];
+  // getnameinfo((struct sockaddr*)&client_address, client_len, address_buffer, sizeof(address_buffer), 0, 0, NI_NUMERICHOST);
 
-  char buffer[1024];
-  const char* invitation = 
-    "Welcome to FTP server!!!\n"
-    "To enter, please input login and password.\r\n";
-  int bytes_send = send(socket_client, invitation, strlen(invitation), 0);
-  int bytes_received = recv(socket_client, buffer, 1024, 0);
-  fprintf(logs, "%s: Got login: %s", current_time_system(),buffer);
-  bytes_received = recv(socket_client, buffer, 1024, 0);
-  fprintf(logs, "%s: Got password: %s\n",current_time_system(), buffer);
-  char generic_command[COMMAND_SIZE];
-  char* command, *parametr;
-  while(1){
-    //printf("Circle...\n");
-    bytes_received = recv(socket_client, generic_command, COMMAND_SIZE, 0);
-    fprintf(logs, "%s: Received generic command: %s\n", current_time_system(), generic_command);
-    parse_command(generic_command, &command, &parametr);
-    //printf("Command: %s param: %s; param strlen: %d\n", command, parametr, strlen(parametr));
-    int flag_operation = 1;
-    if(!strcmp(command,"get")){
-      if(!find_file_in_current_directory(parametr)){
-        flag_operation = 0;
-        send(socket_client, &flag_operation, sizeof(int), 0);
-        fprintf(logs, "%s: File not found!!!\n", current_time_system());
-      }
-      else{
-        flag_operation = 1;
-        send(socket_client, &flag_operation, sizeof(int), 0);
-        // Here should be error handling
-        FILE* to_read = fopen(parametr, "rb");
+  // char buffer[1024];
+  // const char* invitation = 
+  //   "Welcome to FTP server!!!\n"
+  //   "To enter, please input login and password.\r\n";
+  // int bytes_send = send(socket_client, invitation, strlen(invitation), 0);
+  // int bytes_received = recv(socket_client, buffer, 1024, 0);
+  // fprintf(logs, "%s: Got login: %s", current_time_system(),buffer);
+  // bytes_received = recv(socket_client, buffer, 1024, 0);
+  // fprintf(logs, "%s: Got password: %s\n",current_time_system(), buffer);
+  // char generic_command[COMMAND_SIZE];
+  // char* command, *parametr;
+  // while(1){
+  //   //printf("Circle...\n");
+  //   bytes_received = recv(socket_client, generic_command, COMMAND_SIZE, 0);
+  //   fprintf(logs, "%s: Received generic command: %s\n", current_time_system(), generic_command);
+  //   parse_command(generic_command, &command, &parametr);
+  //   //printf("Command: %s param: %s; param strlen: %d\n", command, parametr, strlen(parametr));
+  //   int flag_operation = 1;
+  //   if(!strcmp(command,"get")){
+  //     if(!find_file_in_current_directory(parametr)){
+  //       flag_operation = 0;
+  //       send(socket_client, &flag_operation, sizeof(int), 0);
+  //       fprintf(logs, "%s: File not found!!!\n", current_time_system());
+  //     }
+  //     else{
+  //       flag_operation = 1;
+  //       send(socket_client, &flag_operation, sizeof(int), 0);
+  //       // Here should be error handling
+  //       FILE* to_read = fopen(parametr, "rb");
 
-        SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
-        if(!ISVALIDSOCKET(socket_client_data)){
-          fprintf(logs, "%s: accept() for listen_socket_data failed. (%d)\n",current_time_system(), GETSOCKETERRNO());
-          CLOSESOCKET(listen_socket_data);
-          fclose(logs);
-          return 1;
-        }
-        fprintf(logs, "%s: Sent file with name %s to client with size: %lu bytes\n", parametr,current_time_system(), send_file_to_peer(socket_client_data, to_read, CHUNK_SIZE));
-        fclose(to_read);
-        CLOSESOCKET(socket_client_data);
-      }
-    }
-    else if(!strcmp(command, "put")){
-      if(find_file_in_current_directory(parametr)){
-        flag_operation = 0;
-        send(socket_client, &flag_operation, sizeof(int), 0);
-        fprintf(logs, "%s: File already exist!!!\n", current_time_system());
-      }
-      else{
-        flag_operation = 1;
-        send(socket_client, &flag_operation, sizeof(int), 0);
-        FILE* to_write = fopen(parametr, "ab");
+  //       SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
+  //       if(!ISVALIDSOCKET(socket_client_data)){
+  //         fprintf(logs, "%s: accept() for listen_socket_data failed. (%d)\n",current_time_system(), GETSOCKETERRNO());
+  //         CLOSESOCKET(listen_socket_data);
+  //         fclose(logs);
+  //         return 1;
+  //       }
+  //       fprintf(logs, "%s: Sent file with name %s to client with size: %lu bytes\n", parametr,current_time_system(), send_file_to_peer(socket_client_data, to_read, CHUNK_SIZE));
+  //       fclose(to_read);
+  //       CLOSESOCKET(socket_client_data);
+  //     }
+  //   }
+  //   else if(!strcmp(command, "put")){
+  //     if(find_file_in_current_directory(parametr)){
+  //       flag_operation = 0;
+  //       send(socket_client, &flag_operation, sizeof(int), 0);
+  //       fprintf(logs, "%s: File already exist!!!\n", current_time_system());
+  //     }
+  //     else{
+  //       flag_operation = 1;
+  //       send(socket_client, &flag_operation, sizeof(int), 0);
+  //       FILE* to_write = fopen(parametr, "ab");
 
-        SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
-        if(!ISVALIDSOCKET(socket_client_data)){
-          fprintf(logs, "%s: accept() for listen_socket_data failed. (%d)\n", current_time_system(), GETSOCKETERRNO());
-          CLOSESOCKET(listen_socket_data);
-          fclose(logs);
-          return 1;
-        }
-        fprintf(logs, "%s: Received file with name %s from client with size: %lu bytes\n", current_time_system(), parametr, recv_file_from_peer(socket_client_data, to_write, CHUNK_SIZE));
-        fclose(to_write);
-        CLOSESOCKET(socket_client_data);
-      }
-    }
-    else if(!strcmp(command, "ls")){
-      char* list_of_files = files_in_current_directory();
-      send(socket_client, list_of_files, 1024, 0);
-      free(list_of_files);
-    }
-    else if(!strcmp(command, "exit")){
-      fprintf(logs, "%s: Finished\n", current_time_system());
-      free(command);
-      free(parametr);
-      break;
-    }
-    else{
-      fprintf(logs, "%s: Command not found!!!\n", current_time_system());
-      free(command);
-      free(parametr);
-    }
-    free(command);
-    free(parametr);
-  }
+  //       SOCKET socket_client_data = accept(listen_socket_data, (struct sockaddr*)&client_address, &client_len);
+  //       if(!ISVALIDSOCKET(socket_client_data)){
+  //         fprintf(logs, "%s: accept() for listen_socket_data failed. (%d)\n", current_time_system(), GETSOCKETERRNO());
+  //         CLOSESOCKET(listen_socket_data);
+  //         fclose(logs);
+  //         return 1;
+  //       }
+  //       fprintf(logs, "%s: Received file with name %s from client with size: %lu bytes\n", current_time_system(), parametr, recv_file_from_peer(socket_client_data, to_write, CHUNK_SIZE));
+  //       fclose(to_write);
+  //       CLOSESOCKET(socket_client_data);
+  //     }
+  //   }
+  //   else if(!strcmp(command, "ls")){
+  //     char* list_of_files = files_in_current_directory();
+  //     send(socket_client, list_of_files, 1024, 0);
+  //     free(list_of_files);
+  //   }
+  //   else if(!strcmp(command, "exit")){
+  //     fprintf(logs, "%s: Finished\n", current_time_system());
+  //     free(command);
+  //     free(parametr);
+  //     break;
+  //   }
+  //   else{
+  //     fprintf(logs, "%s: Command not found!!!\n", current_time_system());
+  //     free(command);
+  //     free(parametr);
+  //   }
+  //   free(command);
+  //   free(parametr);
+  // }
 
 
 
-  fclose(logs);
-  CLOSESOCKET(listen_socket);
-  CLOSESOCKET(listen_socket_data);
-  pthread_join(tid, NULL);
-  printf("Main thread finishing...\n");
+  // fclose(logs);
+  // CLOSESOCKET(listen_socket);
+  // CLOSESOCKET(listen_socket_data);
+  // pthread_join(tid, NULL);
+  // printf("Main thread finishing...\n");
   
   // const char* db_name = "users";
   // const char* table_name = "autorization_data";

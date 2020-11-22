@@ -7,6 +7,8 @@ void parse_command(char* generic_command, char** _command, char** _parametr){
     // printf("Input command: %s and her length: %lu\n", generic_command, strlen(generic_command));
     size_t index = 0;
     size_t symbols_length = strlen(generic_command);
+    if(symbols_length <= 0)
+        return ;
     for(;index < symbols_length; index++){
         if(generic_command[index] == ' ' || generic_command[index] == '\n'){
             break;
@@ -17,7 +19,7 @@ void parse_command(char* generic_command, char** _command, char** _parametr){
     memcpy(*_command, generic_command, index);
     // printf("Command: %s and length: %lu\n", *_command, strlen(*_command));
     
-    int parametr_size = strlen(generic_command) - index - 2;
+    int parametr_size = strlen(generic_command) - index - 1;
 
     //printf("Parametr size: %lu and index: %d\n", parametr_size, index);
     

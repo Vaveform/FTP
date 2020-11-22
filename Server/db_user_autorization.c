@@ -33,15 +33,17 @@ void size_to_string(char** arr, size_t ch, size_t prev, size_t current, size_t i
     (*arr)[*ptr - index] = '0' + (ch % current)/prev;
 }
 
+// Count already existing users in database
+int count_callback(void *NotUsed, int argc, char **argv, char **azColName){
+    increment_new_user_id();
+    return 0;
+}
 
 // Function for access to values - prints values
 int callback(void *NotUsed, int argc, char **argv, char **azColName){
     int i;
     for(i=0; i<argc; i++){
-      if(i == argc - 1)
-        printf("%s", argv[i]);
-      else
-        printf("%s,\t", argv[i]);
+        printf("%s\t", argv[i]);
     }
     printf("\n");
     return 0;
@@ -167,7 +169,7 @@ sqlite3* open_database(const char* database_name, const char* table_of_users){
     return NULL;
   }
   char* request = SELECT_ALL_FROM_TABLE(table_of_users);
-  rc = sqlite3_exec(db, request, NULL, 0, NULL);
+  rc = sqlite3_exec(db, request, count_callback, 0, NULL);
   if( rc ){
     free(request);
     request = CREATE_TABLE_BY_CONCRETE_PATTERN(table_of_users);

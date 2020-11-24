@@ -11,16 +11,25 @@
 #include "sqlite3.h"
 #include "db_user_autorization.h"
 
+// Output messages after user authorization
+const char* good_result_authorization = "You are successfully login";
+const char* bad_result_authorization = "You not found in server database. Please try again - 1 or registrate - 2";
+
+// Output messages after registration
+const char* good_result_registration = "You are successfully registrated";
+const char* bad_result_registration = "Registration failed. Please try again - 1 or authorizate - 2";
+
+// Output messages when user not found in registrated users
+const char* after_bad_result_authorization = "If you want to registrated input login and password";
+
+
+
+
 const char* unkn_command = "Unknown server command";
 
 // Declarated database names and table with user information
 const char* db_name = "users";
 const char* table_name = "autorization_data";
-
-
-// Output tokens after user autorization
-const char* good_result_autorization = "You are successfully login";
-const char* bad_result_autorization = "You not found in server database";
 
 // server_status = 1 - server running and waiting connections
 // server_status = 0 - server stopped
@@ -36,7 +45,7 @@ typedef struct system_parametrs{
 
 // To convert string value to int (long) : (int) strtol(argv[i], (char **)NULL, 10);
 
-
+#define invitation_strlen 70
 const char* invitation = 
     "Welcome to FTP server!!!\n"
     "To enter, please input login and password.\r\n";
@@ -117,82 +126,132 @@ int main(int argc, char** argv){
   char* login = NULL, *password = NULL;
   char* command, *parametr;
   int flag_operation;
-  fd_set unknown_sockets, autorizated_sockets;
-  FD_ZERO(&unknown_sockets);
-  FD_ZERO(&autorizated_sockets);
-  FD_SET(listen_socket, &autorizated_sockets);
+  fd_set connections;
+  FD_ZERO(&connections);
+  FD_SET(listen_socket, &connections);
   SOCKET max_socket = listen_socket;
   struct timeval tv;
-  tv.tv_sec = 1;
+  tv.tv_sec = 0;
   tv.tv_usec = 500000;
   while(parametrs.server_status ){
     
-    fd_set copy_autorizated = autorizated_sockets;
-    fd_set copy_unknown = unknown_sockets;
-    if(select(max_socket + 1, &copy_autorizated, &copy_unknown, 0, &tv) < 0){
+    fd_set copy_connection = connections;
+    if(select(max_socket + 1, &copy_connection, 0, 0, &tv) < 0){
       //printf("Select error\n");
       break;
     }
     for(SOCKET i = 1; i <= max_socket; i++){
-      if(FD_ISSET(i, &copy_autorizated)){
+      if(FD_ISSET(i, &copy_connection)){
         if(i == listen_socket){
           // Adding new user
           SOCKET new_client = accept(listen_socket, NULL, NULL);
-          FD_SET(new_client, &unknown_sockets);
-          send(new_client, invitation, strlen(invitation), 0);
+          FD_SET(new_client, &connections);
+          Client_FTP_Message output;
+          output.status = IN_AUTHORIZATION;
+          output.auth_token = USER_NEW_ON_SERVER;
+          output.reg_token = REGISTRATION_NOT_BEGIN;
+          strcpy(output.message, invitation);
+          send(new_client, (void*) &output, sizeof(output), 0);
           if(new_client > max_socket)
             max_socket = new_client;
         }
         else{
           // Working with responses
-          int bytes_received = recv(i, generic_command, COMMAND_SIZE, 0);
+          Client_FTP_Message input;
+          int bytes_received = recv(i, (void*) &input, sizeof(input), 0);
           if(bytes_received < 1)
             continue;
-          parse_command(generic_command, &command, &parametr);
-          if(!strcmp(command, "ls")){
-            char* list_of_files = files_in_current_directory();
-            send(i, list_of_files, 1024, 0);
-            free(list_of_files);
+          if(input.status == IN_AUTHORIZATION){
+            // Client sent login and password
+            char* login = NULL, *password = NULL;
+            parse_command(input.message, &login, &password);
+            memset(input.message, '\0' ,COMMAND_SIZE);
+            if(login == NULL || password == NULL){
+              if(login != NULL)
+                free(login);
+              if(password != NULL)
+                free(password);
+              input.auth_token = USER_NOT_FOUND_IN_SERVER_DATABASE;
+              strcpy(input.message, bad_result_authorization);
+              send(i, (void*) &input, sizeof(input), 0);
+              continue;
+            }
+            if(find_concrete_user(database, table_name, login, password) == 1){
+              input.auth_token = USER_FOUND_IN_SERVER_DATABASE;
+              // input.status = AUTHORIZATED;
+              strcpy(input.message, good_result_authorization);
+              send(i, (void*) &input, sizeof(input), 0);
+            }
+            else{
+              input.auth_token = USER_NOT_FOUND_IN_SERVER_DATABASE;
+              strcpy(input.message, bad_result_authorization);
+              send(i, (void*) &input, sizeof(input), 0);
+            }
+            free(login);
+            free(password);
           }
-          else{
-            send(i, unkn_command, strlen(unkn_command), 0);
+          else if(input.status == IN_REGISTRATION){
+            // Client sent login and password
+            char* login = NULL, *password = NULL;
+            parse_command(input.message, &login, &password);
+            memset(input.message, '\0' ,COMMAND_SIZE);
+            if(login == NULL || password == NULL){
+              if(login != NULL)
+                free(login);
+              if(password != NULL)
+                free(password);
+              input.reg_token = REGISTRATION_FAILED;
+              strcpy(input.message, bad_result_registration);
+              send(i, (void*) &input, sizeof(input), 0);
+              continue;
+            }
+            // Here deep bug in add_user - may be added equal users
+            if(add_user(database, table_name, login, password, "127.0.0.1") == 0){
+              input.reg_token = REGISTRATION_COMPLETE;
+              strcpy(input.message, good_result_registration);
+              send(i, (void*)&input, sizeof(input), 0);
+            }
+            else{
+              input.reg_token = REGISTRATION_FAILED;
+              strcpy(input.message, bad_result_registration);
+              send(i, (void*)&input, sizeof(input), 0);
+            }
+            free(login);
+            free(password);
           }
-        }
-      }
-      else if(FD_ISSET(i, &copy_unknown)){
-        int recv_bytes = recv(i, input_data, 1024, 0);
-        if(recv_bytes < 1){
-          continue;
-        }
-        
+          else if(input.status == AUTHORIZATED){
+            // Sending and receiving files
+            char* command = NULL, *argument = NULL;
+            parse_command(input.message, &command, &argument);
+            memset(input.message, '\0' ,COMMAND_SIZE);
+            if(command != NULL && !strcmp(command, "ls")){
+              char* list_of_files = files_in_current_directory();
+              strcpy(input.message, list_of_files);
+              send(i, (void*)&input, sizeof(input), 0);
+              free(list_of_files);
+            }
+            else{
+              strcpy(input.message, "Invalid command");
+              send(i, (void*)&input, sizeof(input), 0);
+            }
+            if(command != NULL)
+              free(command);
+            if(argument != NULL)
+              free(argument);
+          }
+          else if(input.status == DISCONNECTING){
+            FD_CLR(i, &connections);
+            CLOSESOCKET(i);
 
-        parse_command(input_data, &login, &password);
-        if(login != NULL && password == NULL){
-          free(login);
-          continue;
+          }
         }
-        if(login == NULL || password == NULL)
-          continue;
-        if(find_concrete_user(database, table_name, login, password) == 1){
-          send(i, good_result_autorization, strlen(good_result_autorization), 0);
-          FD_CLR(i, &unknown_sockets);
-          FD_SET(i, &autorizated_sockets);
-        }
-        else{
-          send(i, bad_result_autorization, strlen(bad_result_autorization), 0);
-          FD_CLR(i, &unknown_sockets);
-          CLOSESOCKET(i);
-        }
-        free(login);
-        free(password);
       }
     }
   }
   
   pthread_join(tid, NULL);
   printf("Admin thread finished\n");
-  abort_all_users(&autorizated_sockets, max_socket);
-  abort_all_users(&unknown_sockets, max_socket);
+  abort_all_users(&connections, max_socket);
   sqlite3_close(database);
   CLOSESOCKET(listen_socket);
 

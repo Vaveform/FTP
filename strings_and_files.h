@@ -10,7 +10,15 @@
 #include <dirent.h>
 
 
-#define COMMAND_SIZE 256
+#define COMMAND_SIZE 1024
+
+
+
+// Left trim of string by passed separators
+char *ltrim(char *str, const char *seps);
+
+// Right trim by passed separators
+char *rtrim(char *str, const char *seps);
 
 // Passes empty pointers of char to parse command and his parametr
 // Generic command - command, which should be parsed

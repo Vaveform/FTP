@@ -1,5 +1,41 @@
 #include "strings_and_files.h"
 
+// Left trim of string by passed separators
+char *ltrim(char *str, const char *seps)
+{
+    size_t totrim;
+    if (seps == NULL) {
+        seps = "\t\n\v\f\r ";
+    }
+    totrim = strspn(str, seps);
+    if (totrim > 0) {
+        size_t len = strlen(str);
+        if (totrim == len) {
+            str[0] = '\0';
+        }
+        else {
+            memmove(str, str + totrim, len + 1 - totrim);
+        }
+    }
+    return str;
+}
+
+
+// Right trim by passed separators
+char *rtrim(char *str, const char *seps)
+{
+    int i;
+    if (seps == NULL) {
+        seps = "\t\n\v\f\r ";
+    }
+    i = strlen(str) - 1;
+    while (i >= 0 && strchr(seps, str[i]) != NULL) {
+        str[i] = '\0';
+        i--;
+    }
+    return str;
+}
+
 // Passes empty pointers of char to parse command and his parametr
 // Generic command - command, which should be parsed
 void parse_command(char* generic_command, char** _command, char** _parametr){
@@ -7,8 +43,13 @@ void parse_command(char* generic_command, char** _command, char** _parametr){
     // printf("Input command: %s and her length: %lu\n", generic_command, strlen(generic_command));
     size_t index = 0;
     size_t symbols_length = strlen(generic_command);
-    if(symbols_length <= 0)
+    if(symbols_length <= 0){
+        *_command = NULL;
+        *_parametr = NULL;
         return ;
+    }
+    generic_command = rtrim(generic_command, NULL);
+    generic_command = ltrim(generic_command, NULL);
     for(;index < symbols_length; index++){
         if(generic_command[index] == ' ' || generic_command[index] == '\n'){
             break;
@@ -27,6 +68,7 @@ void parse_command(char* generic_command, char** _command, char** _parametr){
         
         *_parametr = (char*)calloc((size_t)parametr_size, sizeof(char));
         memcpy(*_parametr, &generic_command[index + 1],(size_t)parametr_size);
+        *_parametr = ltrim(*_parametr, NULL);
         // printf("Argument: %s and length: %lu\n", *_parametr, strlen(*_parametr));
     }
     else

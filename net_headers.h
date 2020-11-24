@@ -15,12 +15,43 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "strings_and_files.h"
+
 #define ISVALIDSOCKET(s) ((s) >= 0)
 #define CLOSESOCKET(s) close(s)
 #define SOCKET int
 #define GETSOCKETERRNO() (errno)
 
 #define CHUNK_SIZE 128
+
+
+
+// Output tokens after user authorization
+typedef enum Authorization_Token{
+    USER_NOT_FOUND_IN_SERVER_DATABASE = 404,
+    USER_FOUND_IN_SERVER_DATABASE = 200,
+    USER_NEW_ON_SERVER = 101,
+} Authorization_Token;
+
+typedef enum Registration_Token{
+    REGISTRATION_FAILED = 560,
+    REGISTRATION_COMPLETE = 310,
+    REGISTRATION_NOT_BEGIN = 15,
+} Registration_Token;
+
+typedef enum Client_Status{
+    DISCONNECTING = 0x00AF,
+    IN_AUTHORIZATION = 0x00BF,
+    IN_REGISTRATION = 0x00CF,
+    AUTHORIZATED = 0x00DF,
+} Client_Status;
+
+typedef struct Client_FTP_Message{
+    Authorization_Token auth_token;
+    Registration_Token reg_token;
+    Client_Status status;
+    char message[COMMAND_SIZE];
+} Client_FTP_Message;
 
 char* current_time_system();
 

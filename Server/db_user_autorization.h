@@ -36,17 +36,19 @@ char* SELECT_ALL_FROM_TABLE(const char* table);
 // Print table of users data in open data base db
 void print_table(sqlite3* db, const char* table_of_users);
 
-// Add user to open database with login and password
-// Returned 1 - if database not opened or NULL
-// Returned 0 - OK
-// Returned -1 - request error
-int add_user(sqlite3* db, const char* table_of_users, const char* login, const char* password, const char* ip);
-
 // Find user in database with concrete password and login
 // Returned -1 - undifined poiter to db
 // Return -9 - some problem with db or execute statement(SQL)
 // Returned 0 - user not found
 // Returned 1 - user found
 int find_concrete_user(sqlite3* db, const char* table_of_users, const char* login, const char* password);
+
+// Add user to open database with login and password
+// Returned 1 - if database not opened or NULL
+// Returned 0 - OK
+// Returned -1 - request error
+int add_user(sqlite3* db, const char* table_of_users, const char* login, const char* password, const char* ip);
+
+
 
 

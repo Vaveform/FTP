@@ -45,10 +45,9 @@ typedef struct system_parametrs{
 
 // To convert string value to int (long) : (int) strtol(argv[i], (char **)NULL, 10);
 
-#define invitation_strlen 70
 const char* invitation = 
     "Welcome to FTP server!!!\n"
-    "To enter, please input login and password.\r\n";
+    "To enter, please input login and password\nLogin:\n";
 
 
 
@@ -87,6 +86,7 @@ int abort_all_users(fd_set* users, SOCKET max_socket_){
   for(SOCKET i = 1; i <= max_socket_; i++){
     if(FD_ISSET(i, users)){
       number_of_users++;
+      shutdown(i, SHUT_RDWR);
       CLOSESOCKET(i);
       FD_CLR(i, users);
     }
@@ -130,10 +130,11 @@ int main(int argc, char** argv){
   FD_ZERO(&connections);
   FD_SET(listen_socket, &connections);
   SOCKET max_socket = listen_socket;
-  struct timeval tv;
-  tv.tv_sec = 0;
-  tv.tv_usec = 500000;
+
   while(parametrs.server_status ){
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 500;
     
     fd_set copy_connection = connections;
     if(select(max_socket + 1, &copy_connection, 0, 0, &tv) < 0){
@@ -146,6 +147,7 @@ int main(int argc, char** argv){
           // Adding new user
           SOCKET new_client = accept(listen_socket, NULL, NULL);
           FD_SET(new_client, &connections);
+          // Server send initial struct with initial statuses
           Client_FTP_Message output;
           output.status = IN_AUTHORIZATION;
           output.auth_token = USER_NEW_ON_SERVER;
@@ -162,7 +164,7 @@ int main(int argc, char** argv){
           if(bytes_received < 1)
             continue;
           if(input.status == IN_AUTHORIZATION){
-            // Client sent login and password
+            // Client sent login and password in authorization status
             char* login = NULL, *password = NULL;
             parse_command(input.message, &login, &password);
             memset(input.message, '\0' ,COMMAND_SIZE);
@@ -171,6 +173,7 @@ int main(int argc, char** argv){
                 free(login);
               if(password != NULL)
                 free(password);
+              // Client decide disconnect or try again authorize
               input.auth_token = USER_NOT_FOUND_IN_SERVER_DATABASE;
               strcpy(input.message, bad_result_authorization);
               send(i, (void*) &input, sizeof(input), 0);
@@ -178,11 +181,13 @@ int main(int argc, char** argv){
             }
             if(find_concrete_user(database, table_name, login, password) == 1){
               input.auth_token = USER_FOUND_IN_SERVER_DATABASE;
-              // input.status = AUTHORIZATED;
+              input.status = AUTHORIZATED;
+              input.reg_token = REGISTRATION_COMPLETE;
               strcpy(input.message, good_result_authorization);
               send(i, (void*) &input, sizeof(input), 0);
             }
             else{
+              // Client decide disconnect or try again authorize
               input.auth_token = USER_NOT_FOUND_IN_SERVER_DATABASE;
               strcpy(input.message, bad_result_authorization);
               send(i, (void*) &input, sizeof(input), 0);
@@ -206,7 +211,7 @@ int main(int argc, char** argv){
               continue;
             }
             // Here deep bug in add_user - may be added equal users
-            if(add_user(database, table_name, login, password, "127.0.0.1") == 0){
+            if(add_user(database, table_name, login, password, "127.0.0.1") == 1){
               input.reg_token = REGISTRATION_COMPLETE;
               strcpy(input.message, good_result_registration);
               send(i, (void*)&input, sizeof(input), 0);
@@ -251,9 +256,11 @@ int main(int argc, char** argv){
   
   pthread_join(tid, NULL);
   printf("Admin thread finished\n");
+
+
   abort_all_users(&connections, max_socket);
   sqlite3_close(database);
-  CLOSESOCKET(listen_socket);
+  
 
 
   // char* selectall = SELECT_ALL_FROM_TABLE("data_autoasdrization");

@@ -4,6 +4,8 @@
 #include "../net_headers.h"
 #include "../strings_and_files.h"
 
+const char *inp_login_password = "Login and password: \n";
+
 int main(int argc, int** argv){
 
     // Socket for chatting with server
@@ -13,17 +15,25 @@ int main(int argc, int** argv){
         return -1;
     }
 
+    // recv(socket_peer, (void*)&message, sizeof(message), 0);
+    // printf("%s\n", message.message);
+
     fd_set connections;
+    FD_ZERO(&connections);
     // Add server socket
     FD_SET(socket_peer, &connections);
     // Add stdin descriptor
     FD_SET(0, &connections);
+
     Client_FTP_Message message;
+
+    
     while(1){
         memset(message.message, '\0', COMMAND_SIZE);
+
         struct timeval tv;
         tv.tv_sec = 0;
-        tv.tv_usec = 500000;
+        tv.tv_usec = 500;
         fd_set copy_connections = connections;
         if(select(socket_peer + 1, &copy_connections, 0, 0, &tv) < 0){
             printf("Select() error.\n");
@@ -36,10 +46,12 @@ int main(int argc, int** argv){
                 CLOSESOCKET(socket_peer);
                 break;
             }
-            printf("Recieved FTP_message\nFTP_Message auth token: %d\nFTP_Message reg token: %d\nFTP_Message client status: %d\n", (int)message.auth_token, (int)message.reg_token, (int)message.status);
-            printf("FTP_Message recived message: %s", message.message);
+            fputs(message.message, stdout);
+            //printf("Recieved FTP_message\nFTP_Message auth token: %d\nFTP_Message reg token: %d\nFTP_Message client status: %d\nFTP_Message recived message: %s\n", (int)message.auth_token, (int)message.reg_token, (int)message.status, message.message);
         }
         if(FD_ISSET(0, &copy_connections)){
+            if(message.status == IN_AUTHORIZATION)
+                fputs("Password: ", stdout);
             if(!fgets(message.message, COMMAND_SIZE, stdin)){
                 printf("fgets error\n");
                 message.status = DISCONNECTING;
@@ -54,7 +66,6 @@ int main(int argc, int** argv){
 
         }
     }
-
 
     // char readed_data[1024];     
     // // Receive invitation and print them

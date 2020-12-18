@@ -187,26 +187,6 @@ sqlite3* open_database(const char* database_name, const char* table_of_users){
 } 
 
 
-// Add user to open database with login and password
-// Returned 1 - if database not opened or NULL
-// Returned 0 - OK
-// Returned -1 - request error
-int add_user(sqlite3* db, const char* table_of_users, const char* login, const char* password, const char* ip){
-    if(db == NULL){
-        return 1;
-    }
-
-    char* request = ADD_USER_TO_DATABASE(table_of_users, get_new_user_id(), login, password, ip);
-    int rc = sqlite3_exec(db, request, NULL, 0, NULL);
-    free(request);
-    if(rc){
-        return -1;
-    }
-    increment_new_user_id();
-    return 0;
-}
-
-
 // Find user in database with concrete password and login
 // Returned -1 - undifined poiter to db
 // Return -9 - some problem with db or execute statement(SQL)
@@ -232,6 +212,28 @@ int find_concrete_user(sqlite3* db, const char* table_of_users, const char* logi
     }
     
     return 0;
+}
+
+
+// Add user to open database with login and password
+// Returned -1 - undifined poiter to db
+// Returned -9 - some problem with db or execute statement(SQL)
+// Returned 0 - user exists
+// Returned 1 - OK
+int add_user(sqlite3* db, const char* table_of_users, const char* login, const char* password, const char* ip){
+    if(db == NULL){
+        return -9;
+    }
+    if(find_concrete_user(db, table_of_users, login, password) == 1)
+        return 0;
+    char* request = ADD_USER_TO_DATABASE(table_of_users, get_new_user_id(), login, password, ip);
+    int rc = sqlite3_exec(db, request, NULL, 0, NULL);
+    free(request);
+    if(rc){
+        return -9;
+    }
+    increment_new_user_id();
+    return 1;
 }
 
 

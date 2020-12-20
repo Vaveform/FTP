@@ -1,4 +1,4 @@
-#include "db_user_autorization.h"
+#include "db_user_authorization.h"
 
 
 #define first_part_length_select_all 14
